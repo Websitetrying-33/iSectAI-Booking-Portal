@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iSect CRM & Client Portal</title>
+    <!-- Tailwind CSS & React via CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen antialiased selection:bg-indigo-500 selection:text-white">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        function App() {
+            const [view, setView] = useState('dashboard');
+            const [appointments, setAppointments] = useState([]);
+            const [searchTerm, setSearchTerm] = useState('');
+            const [editingId, setEditingId] = useState(null);
+            
+            const [formData, setFormData] = useState({
+                clientName: '',
+                serviceCategory: 'Clinic Consultation',
+                date: '2026-10-21',
+                timeSlot: '03:30 PM',
+                status: 'Confirmed',
+                notes: ''
+            });
+            const [statusMessage, setStatusMessage] = useState(null);
+
+            const fetchAppointments = async () => {
+                try {
+                    const res = await fetch('http://localhost:5000/api/appointments');
+                    const data = await res.json();
+                    if (data.appointments) {
+                        setAppointments(data.appointments);
+                    }
+                } catch (err) {
+                    console.error('Error fetching appointments:', err);
+                }
+            };
+
+            useEffect(() => {
+                fetchAppointments();
+            }, []);
+
+            const handleChange = (e) => {
+                setFormData({ ...formData, [e.target.name]: e.target.value });
+            };
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                try {
+                    const url = editingId 
+                        ? `http://localhost:5000/api/appointments/${editingId}`
+                        : 'http://localhost:5000/api/appointments';
+                    
+                    const method = editingId ? 'PUT' : 'POST';
+
+                    const res = await fetch(url, {
+                        method: method,
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(formData)
+                    });
+                    
+                    if (res.ok) {
+                        setStatusMessage({ 
+                            type: 'success', 
+                            text: editingId ? 'Appointment successfully updated!' : 'Appointment successfully saved to database!' 
+                        });
+                        setFormData({ clientName: '', serviceCategory: 'Clinic Consultation', date: '2026-10-21', timeSlot: '03:30 PM', status: 'Confirmed', notes: '' });
+                        setEditingId(null);
+                        fetchAppointments();
+                        setTimeout(() => {
+                            setStatusMessage(null);
+                            setView('dashboard');
+                        }, 1200);
+                    }
+                } catch (err) {
+                    setStatusMessage({ type: 'error', text: 'Network error. Make sure server.js is running.' });
+                }
+            };
+
+            const handleEditClick = (item) => {
+                setEditingId(item.id);
+                setFormData({
+                    clientName: item.clientName,
+                    serviceCategory: item.serviceCategory,
+                    date: item.date,
+                    timeSlot: item.timeSlot,
+                    status: item.status || 'Confirmed',
+                    notes: item.notes || ''
+                });
+                setView('form');
+            };
+
+            const handleNewBookingClick = () => {
+                setEditingId(null);
+                setFormData({
+                    clientName: '',
+                    serviceCategory: 'Clinic Consultation',
+                    date: '2026-10-21',
+                    timeSlot: '03:30 PM',
+                    status: 'Confirmed',
+                    notes: ''
+                });
+                setView('form');
+            };
+
+            const handleDelete = async (id) => {
+                if (!confirm('Are you sure you want to delete this appointment?')) return;
+                try {
+                    await fetch(`http://localhost:5000/api/appointments/${id}`, { method: 'DELETE' });
+                    fetchAppointments();
+                } catch (err) {
+                    console.error('Error deleting:', err);
+                }
+            };
+
+            const exportToCSV = () => {
+                let csvContent = "data:text/csv;charset=utf-8,ID,Client Name,Service Category,Date,Time Slot,Status,Notes\n";
+                appointments.forEach(row => {
+                    const cleanNotes = (row.notes || "").replace(/"/g, '""');
+                    csvContent += `${row.id},"${row.clientName}","${row.serviceCategory}",${row.date},${row.timeSlot},"${row.status || 'Confirmed'}","${cleanNotes}"\n`;
+                });
+                const encodedUri = encodeURI(csvContent);
+                const link = document.createElement("a");
+                link.setAttribute("href", encodedUri);
+                link.setAttribute("download", "crm_appointments_report.csv");
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            };
+
+            const filteredAppointments = appointments.filter(item => 
+                item.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                item.serviceCategory.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                (item.notes && item.notes.toLowerCase().includes(searchTerm.toLowerCase()))
+            );
+
+            return (
+                <div className="min-h-screen flex flex-col justify-between bg-slate-950 text-slate-100">
+                    {/* Top Header */}
+                    <header className="bg-slate-900/80 backdrop-blur-md sticky top-0 z-50 text-white px-8 py-4 flex justify-between items-center border-b border-slate-800">
+                        <div className="flex items-center space-x-3.5">
+                            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-violet-400 flex items-center justify-center shadow-lg shadow-indigo-500/20 ring-1 ring-white/20">
+                                <span className="text-white font-extrabold text-sm tracking-wider">iS</span>
+                            </div>
+                            <div>
+                                <h1 className="text-sm font-bold tracking-tight flex items-center gap-2">
+                                    iSect <span className="bg-indigo-500/25 text-indigo-300 text-[10px] px-2 py-0.5 rounded-full border border-indigo-500/30 font-semibold">CRM v2.0</span>
+                                </h1>
+                                <p className="text-[11px] text-slate-400">Client Management & Booking Portal</p>
+                            </div>
+                        </div>
+                        <div className="flex items-center space-x-3">
+                            <button 
+                                onClick={() => setView('dashboard')} 
+                                className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center space-x-2 ${view === 'dashboard' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 ring-1 ring-indigo-400/30' : 'text-slate-400 hover:text-white hover:bg-slate-800/60'}`}>
+                                <i className="fa-solid fa-chart-pie text-xs"></i>
+                                <span>Dashboard ({appointments.length})</span>
+                            </button>
+                            <button 
+                                onClick={handleNewBookingClick} 
+                                className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center space-x-2 ${view === 'form' && !editingId ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 ring-1 ring-indigo-400/30' : 'text-slate-400 hover:text-white hover:bg-slate-800/60'}`}>
+                                <i className="fa-solid fa-plus-circle text-xs"></i>
+                                <span>New Booking</span>
+                            </button>
+                        </div>
+                    </header>
+
+                    {/* Main Content Area */}
+                    <main className="flex-grow p-8 max-w-7xl mx-auto w-full">
+                        {statusMessage && (
+                            <div className={`mb-6 p-4 rounded-xl text-xs font-semibold flex items-center space-x-3 shadow-lg border ${statusMessage.type === 'success' ? 'bg-emerald-950/80 text-emerald-300 border-emerald-800/60' : 'bg-rose-950/80 text-rose-300 border-rose-800/60'}`}>
+                                <i className={`fa-solid ${statusMessage.type === 'success' ? 'fa-circle-check text-emerald-400 text-base' : 'fa-circle-exclamation text-rose-400 text-base'}`}></i>
+                                <span>{statusMessage.text}</span>
+                            </div>
+                        )}
+
+                        {view === 'form' ? (
+                            <div className="bg-slate-900/90 backdrop-blur-xl max-w-xl mx-auto p-8 rounded-2xl shadow-2xl border border-slate-800">
+                                <div className="mb-6 pb-4 border-b border-slate-800 flex items-center justify-between">
+                                    <div>
+                                        <h2 className="text-base font-bold text-white flex items-center space-x-2">
+                                            <i className={`fa-solid ${editingId ? 'fa-pen-to-square text-amber-400' : 'fa-calendar-plus text-indigo-400'}`}></i>
+                                            <span>{editingId ? `Edit Appointment #${editingId}` : 'Create New Appointment'}</span>
+                                        </h2>
+                                        <p className="text-xs text-slate-400 mt-0.5">Fill in the client requirements below.</p>
+                                    </div>
+                                    <button onClick={() => setView('dashboard')} className="text-slate-500 hover:text-slate-300 text-sm">
+                                        <i className="fa-solid fa-xmark"></i>
+                                    </button>
+                                </div>
+                                
+                                <form onSubmit={handleSubmit} className="space-y-4">
+                                    <div>
+                                        <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Client Full Name</label>
+                                        <div className="relative">
+                                            <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+                                                <i className="fa-solid fa-user text-xs"></i>
+                                            </span>
+                                            <input 
+                                                type="text" 
+                                                name="clientName"
+                                                value={formData.clientName}
+                                                onChange={handleChange}
+                                                required
+                                                placeholder="e.g. Marc Vaughn"
+                                                className="w-full pl-10 pr-4 py-2.5 border border-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 text-xs bg-slate-950/60 text-white transition"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Service Category</label>
+                                            <select 
+                                                name="serviceCategory"
+                                                value={formData.serviceCategory}
+                                                onChange={handleChange}
+                                                className="w-full px-3.5 py-2.5 border border-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 text-xs bg-slate-950/60 text-white transition">
+                                                <option className="bg-slate-900">Clinic Consultation</option>
+                                                <option className="bg-slate-900">Full-Stack Web Development</option>
+                                                <option className="bg-slate-900">Shopify Customization & Metafields</option>
+                                                <option className="bg-slate-900">TikTok Shop Operations</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Booking Status</label>
+                                            <select 
+                                                name="status"
+                                                value={formData.status}
+                                                onChange={handleChange}
+                                                className="w-full px-3.5 py-2.5 border border-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 text-xs bg-slate-950/60 text-white transition">
+                                                <option className="bg-slate-900">Confirmed</option>
+                                                <option className="bg-slate-900">Pending</option>
+                                                <option className="bg-slate-900">Completed</option>
+                                                <option className="bg-slate-900">Cancelled</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Date</label>
+                                            <input 
+                                                type="date" 
+                                                name="date"
+                                                value={formData.date}
+                                                onChange={handleChange}
+                                                required
+                                                className="w-full px-3.5 py-2.5 border border-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 text-xs bg-slate-950/60 text-white transition"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Time Slot</label>
+                                            <select 
+                                                name="timeSlot"
+                                                value={formData.timeSlot}
+                                                onChange={handleChange}
+                                                className="w-full px-3.5 py-2.5 border border-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 text-xs bg-slate-950/60 text-white transition">
+                                                <option className="bg-slate-900">09:00 AM</option>
+                                                <option className="bg-slate-900">10:30 AM</option>
+                                                <option className="bg-slate-900">01:00 PM</option>
+                                                <option className="bg-slate-900">03:30 PM</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Client Notes / Special Requests</label>
+                                        <textarea 
+                                            name="notes"
+                                            value={formData.notes}
+                                            onChange={handleChange}
+                                            rows="3"
+                                            placeholder="e.g. Initial review via Zoom, urgent request..."
+                                            className="w-full p-3.5 border border-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 text-xs bg-slate-950/60 text-white transition"
+                                        ></textarea>
+                                    </div>
+
+                                    <div className="flex justify-end space-x-3 pt-4 border-t border-slate-800">
+                                        <button 
+                                            type="button" 
+                                            onClick={() => setView('dashboard')}
+                                            className="px-4 py-2.5 border border-slate-700 rounded-xl text-xs font-semibold text-slate-300 hover:bg-slate-800 transition">
+                                            Cancel
+                                        </button>
+                                        <button 
+                                            type="submit" 
+                                            className={`px-5 py-2.5 text-white rounded-xl text-xs font-semibold shadow-lg transition ${editingId ? 'bg-amber-600 hover:bg-amber-500 shadow-amber-900/30' : 'bg-indigo-600 hover:bg-indigo-500 shadow-indigo-900/30'}`}>
+                                            {editingId ? 'Update Record' : 'Save Booking'}
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        ) : (
+                            <div className="space-y-6">
+                                {/* Enhanced Stat Cards */}
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                                    <div className="bg-slate-900/80 border border-slate-800 p-5 rounded-2xl flex items-center justify-between relative overflow-hidden group hover:border-indigo-500/50 transition">
+                                        <div className="absolute top-0 right-0 w-28 h-28 bg-indigo-600/10 rounded-full blur-3xl -mr-6 -mt-6"></div>
+                                        <div>
+                                            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Bookings</p>
+                                            <h3 className="text-3xl font-extrabold text-white mt-1">{appointments.length}</h3>
+                                        </div>
+                                        <div className="bg-indigo-500/10 text-indigo-400 w-12 h-12 rounded-2xl flex items-center justify-center text-lg border border-indigo-500/20">
+                                            <i className="fa-solid fa-users"></i>
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-slate-900/80 border border-slate-800 p-5 rounded-2xl flex items-center justify-between relative overflow-hidden group hover:border-emerald-500/50 transition">
+                                        <div className="absolute top-0 right-0 w-28 h-28 bg-emerald-600/10 rounded-full blur-3xl -mr-6 -mt-6"></div>
+                                        <div>
+                                            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Database Status</p>
+                                            <h3 className="text-xs font-bold text-emerald-400 mt-2 flex items-center space-x-1.5 bg-emerald-950/60 px-3 py-1.5 rounded-xl border border-emerald-800/50 w-fit">
+                                                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                                                <span>SQLite Connected</span>
+                                            </h3>
+                                        </div>
+                                        <div className="bg-emerald-500/10 text-emerald-400 w-12 h-12 rounded-2xl flex items-center justify-center text-lg border border-emerald-500/20">
+                                            <i className="fa-solid fa-database"></i>
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-slate-900/80 border border-slate-800 p-5 rounded-2xl flex items-center justify-between">
+                                        <div>
+                                            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Data Report</p>
+                                            <h3 className="text-xs font-semibold text-slate-300 mt-1">Export records to spreadsheet</h3>
+                                        </div>
+                                        <button 
+                                            onClick={exportToCSV}
+                                            className="px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-xs font-semibold hover:bg-emerald-500 shadow-lg shadow-emerald-900/30 transition flex items-center space-x-2 border border-emerald-500/30">
+                                            <i className="fa-solid fa-download"></i>
+                                            <span>Export CSV</span>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Main Table Card */}
+                                <div className="bg-slate-900/80 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
+                                    <div className="p-6 border-b border-slate-800 flex flex-col md:flex-row justify-between items-center gap-4">
+                                        <div>
+                                            <h2 className="text-base font-bold text-white">Appointment Records</h2>
+                                            <p className="text-xs text-slate-400 mt-0.5">Manage client bookings, status indicators, and notes.</p>
+                                        </div>
+                                        <div className="relative w-full md:w-72">
+                                            <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+                                                <i className="fa-solid fa-search text-xs"></i>
+                                            </span>
+                                            <input 
+                                                type="text" 
+                                                placeholder="Search client, service, notes..." 
+                                                value={searchTerm}
+                                                onChange={(e) => setSearchTerm(e.target.value)}
+                                                className="w-full pl-10 pr-4 py-2 border border-slate-800 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/40 bg-slate-950/60 text-white"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {filteredAppointments.length === 0 ? (
+                                        <div className="text-center py-16 text-slate-500">
+                                            <i className="fa-regular fa-folder-open text-3xl mb-2 text-slate-600"></i>
+                                            <p className="text-xs font-medium text-slate-400">No appointments found.</p>
+                                            <button onClick={handleNewBookingClick} className="mt-3 inline-flex items-center space-x-2 px-3.5 py-2 bg-indigo-600/20 text-indigo-300 font-semibold text-xs rounded-xl hover:bg-indigo-600/30 transition border border-indigo-500/30">
+                                                <i className="fa-solid fa-plus text-[10px]"></i>
+                                                <span>Create your first booking</span>
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-left border-collapse text-xs">
+                                                <thead>
+                                                    <tr className="border-b border-slate-800 text-slate-400 font-bold uppercase bg-slate-950/40 tracking-wider text-[10px]">
+                                                        <th className="p-4">ID</th>
+                                                        <th className="p-4">Client Name</th>
+                                                        <th className="p-4">Service Category</th>
+                                                        <th className="p-4">Status</th>
+                                                        <th className="p-4">Date & Time</th>
+                                                        <th className="p-4">Notes</th>
+                                                        <th className="p-4 text-right">Actions</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-800/60">
+                                                    {filteredAppointments.map((item) => {
+                                                        const statusColor = 
+                                                            item.status === 'Completed' ? 'bg-emerald-950/80 text-emerald-400 border-emerald-800/80' :
+                                                            item.status === 'Pending' ? 'bg-amber-950/80 text-amber-400 border-amber-800/80' :
+                                                            item.status === 'Cancelled' ? 'bg-rose-950/80 text-rose-400 border-rose-800/80' :
+                                                            'bg-indigo-950/80 text-indigo-400 border-indigo-800/80';
+
+                                                        return (
+                                                            <tr key={item.id} className="hover:bg-slate-800/40 transition align-top">
+                                                                <td className="p-4 font-mono text-slate-500 font-bold">#{item.id}</td>
+                                                                <td className="p-4 font-bold text-white">
+                                                                    <div className="flex items-center space-x-2.5">
+                                                                        <div className="w-7 h-7 rounded-lg bg-indigo-500/20 text-indigo-300 flex items-center justify-center font-bold text-[11px] flex-shrink-0 border border-indigo-500/30">
+                                                                            {item.clientName.charAt(0)}
+                                                                        </div>
+                                                                        <span>{item.clientName}</span>
+                                                                    </div>
+                                                                </td>
+                                                                <td className="p-4">
+                                                                    <span className="px-2.5 py-1 bg-slate-800/80 text-slate-300 rounded-lg font-medium inline-block text-[11px] border border-slate-700/50">
+                                                                        {item.serviceCategory}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="p-4">
+                                                                    <span className={`px-2.5 py-1 rounded-lg border font-semibold inline-block text-[11px] ${statusColor}`}>
+                                                                        {item.status || 'Confirmed'}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="p-4 text-slate-300 font-medium whitespace-nowrap">
+                                                                    <div><i className="fa-regular fa-calendar text-indigo-400 mr-1.5"></i> {item.date}</div>
+                                                                    <div className="text-[11px] text-slate-500 mt-0.5"><i className="fa-regular fa-clock mr-1.5"></i> {item.timeSlot}</div>
+                                                                </td>
+                                                                <td className="p-4 text-slate-300 max-w-xs">
+                                                                    {item.notes ? (
+                                                                        <p className="text-[11px] bg-amber-950/40 border border-amber-800/40 text-amber-200/90 p-2 rounded-lg italic">
+                                                                            "{item.notes}"
+                                                                        </p>
+                                                                    ) : (
+                                                                        <span className="text-[11px] text-slate-600 italic">No notes</span>
+                                                                    )}
+                                                                </td>
+                                                                <td className="p-4 text-right space-x-1.5 whitespace-nowrap">
+                                                                    <button 
+                                                                        onClick={() => handleEditClick(item)}
+                                                                        className="text-amber-400 hover:text-white font-medium text-[11px] bg-amber-950/40 hover:bg-amber-600 px-2.5 py-1.5 rounded-lg border border-amber-800/50 transition shadow-sm">
+                                                                        <i className="fa-solid fa-pen-to-square mr-1"></i> Edit
+                                                                    </button>
+                                                                    <button 
+                                                                        onClick={() => handleDelete(item.id)}
+                                                                        className="text-rose-400 hover:text-white font-medium text-[11px] bg-rose-950/40 hover:bg-rose-600 px-2.5 py-1.5 rounded-lg border border-rose-800/50 transition shadow-sm">
+                                                                        <i className="fa-solid fa-trash-can mr-1"></i> Delete
+                                                                    </button>
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </main>
+
+                    {/* Footer */}
+                    <footer className="text-center py-6 text-[11px] text-slate-500 border-t border-slate-900 bg-slate-950">
+                        iSect CRM Portal • Powered by Node.js + Express + SQLite + React
+                    </footer>
+                </div>
+            );
+        }
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
