@@ -207,5 +207,4 @@ app.delete('/api/appointments/:id', (req, res) => {
 // Start Server
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
->>>>>>> dc3c3caef2db5477739f4dd00cd5d2c0c723b598
 });
