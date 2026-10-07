@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const cors = require('cors');
@@ -103,7 +103,6 @@ app.delete('/api/appointments/:id', (req, res) => {
 // Start Server
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
-=======
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const cors = require('cors');
